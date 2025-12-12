@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="ir_mail_server_view_form_l10n_it_edi_pec" model="ir.ui.view">
+        <field name="name">ir.mail_server.form.l10n_it_edi_pec</field>
+        <field name="model">ir.mail_server</field>
+        <field name="priority" eval="1"/>
+        <field name="arch" type="xml">
+            <form string="Outgoing Mail Server">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="is_l10n_it_edi_pec"/>
+                            <field name="smtp_host"/>
+                            <field name="smtp_port"/>
+                            <field name="smtp_encryption"/>
+                            <field name="smtp_user"/>
+                            <field name="smtp_pass" password="True"/>
+                        </group>
+                        
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="fetchmail_server_view_list_incoming_l10n_it_edi_pec" model="ir.ui.view">
+        <field name="name">fetchmail.server.list.incoming.l10n_it_edi_pec</field>
+        <field name="model">fetchmail.server</field>
+        <field name="priority" eval="2"/>
+        <field name="arch" type="xml">
+            <list string="Incoming PEC Servers">
+                <field name="name"/>
+                <field name="server_type"/>
+                <field name="server"/>
+                <field name="port"/>
+                <field name="is_ssl"/>
+                <field name="user"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+</odoo>

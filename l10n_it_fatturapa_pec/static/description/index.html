@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Italy - EDI PEC (FatturaPA)</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; padding: 24px; color: #222; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin-top: 20px; }
+    ul { margin: 0 0 12px 20px; }
+    .meta { color: #666; font-size: 14px; margin-bottom: 16px; }
+    .block { margin-bottom: 18px; }
+    .badge { display: inline-block; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; margin-right: 6px; font-size: 12px; }
+  </style>
+  <meta name="description" content="PEC support for Italian e-invoicing (FatturaPA) on Odoo 18."/>
+</head>
+<body>
+  <h1>Italy - EDI PEC (FatturaPA)</h1>
+  <div class="meta">
+    <span class="badge">Odoo 18</span>
+    <span class="badge">EDI</span>
+    <span class="badge">PEC</span>
+  </div>
+
+  <div class="block">
+    <p>This module provides PEC support for Italian e-invoicing (FatturaPA) on top of the EDI stack. It allows sending invoices to SdI via PEC, receiving SdI notifications, and importing incoming supplier invoices received via PEC.</p>
+  </div>
+
+  <h2>Features</h2>
+  <ul>
+    <li>Send e-invoices via PEC using configured SMTP server</li>
+    <li>Fetch PEC emails (IMAP/POP) and parse SdI notifications</li>
+    <li>Route PEC messages, update EDI states on invoices</li>
+    <li>Import incoming e-invoices from PEC attachments</li>
+    <li>Company configuration of PEC servers and usage flag</li>
+  </ul>
+
+  <h2>Configuration</h2>
+  <ul>
+    <li>Enable the PEC channel in Company settings</li>
+    <li>Mark <code>ir.mail_server</code> as PEC SMTP and set credentials</li>
+    <li>Mark <code>fetchmail.server</code> as PEC and activate the cron</li>
+  </ul>
+
+  <h2>Dependencies</h2>
+  <ul>
+    <li>Odoo: <code>mail</code>, <code>fetchmail</code></li>
+    <li>Odoo/OCA: <code>l10n_it_edi</code>, <code>l10n_it_edi_extension</code></li>
+  </ul>
+
+  <h2>Maintainers</h2>
+  <p>Odoo Community Association (OCA) and contributors.</p>
+
+  <hr/>
+
+  <h2>Descrizione (Italiano)</h2>
+  <div class="block">
+    <p>Il modulo aggiunge il supporto PEC (Posta Elettronica Certificata) per la Fatturazione Elettronica italiana (FatturaPA) su Odoo 18, integrandosi con lo stack EDI. Consente l'invio delle fatture via PEC verso SdI, la ricezione delle notifiche SdI via PEC e l'importazione delle fatture passive ricevute via PEC.</p>
+  </div>
+
+  <h2>Caratteristiche</h2>
+  <ul>
+    <li>Invio fatture elettroniche via PEC con il server SMTP configurato</li>
+    <li>Ricezione email PEC (IMAP/POP) e parsing delle notifiche SdI</li>
+    <li>Instradamento dei messaggi PEC e aggiornamento degli stati EDI sulle fatture</li>
+    <li>Import delle fatture passive da allegati PEC</li>
+    <li>Configurazione aziendale di server PEC e attivazione canale</li>
+  </ul>
+
+  <h2>Configurazione</h2>
+  <ol>
+    <li>In Impostazioni &gt; Aziende &gt; Configurazione PEC Fatture, attiva "Usa PEC per Fatture".</li>
+    <li>In <code>ir.mail_server</code>, configura le credenziali PEC e spunta "E-invoice PEC SMTP".</li>
+    <li>In <code>fetchmail.server</code>, configura la casella PEC (IMAP/POP) e spunta "E-invoice PEC server".</li>
+    <li>Verifica che il cron "Fetch E-invoice PEC Emails" sia attivo.</li>
+  </ol>
+
+  <h2>Uso</h2>
+  <ul>
+    <li>Dalla fattura attiva, usa l'invio EDI: se la PEC è abilitata, l'invio avviene via PEC.</li>
+    <li>Le notifiche SdI in arrivo dalla casella PEC sono applicate alla fattura corrispondente.</li>
+    <li>Le fatture passive ricevute via PEC vengono importate e collegate come allegati.</li>
+  </ul>
+</body>
+</html>

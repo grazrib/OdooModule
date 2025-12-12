@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_company_form_l10n_it_edi_pec" model="ir.ui.view">
+        <field name="name">res.company.form.l10n_it_edi_pec</field>
+        <field name="model">res.company</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="E-invoice PEC Configuration" name="l10n_it_edi_pec">
+                    <field name="l10n_it_edi_use_pec"/>
+                    <field name="l10n_it_edi_pec_sdi_email" invisible="not l10n_it_edi_use_pec"/>
+                    <field name="l10n_it_edi_pec_server_id" invisible="not l10n_it_edi_use_pec" domain="[('active','=',True)]"/>
+                    <field name="l10n_it_edi_pec_smtp_server_id" invisible="not l10n_it_edi_use_pec" domain="[('active','=',True)]"/>
+                    <field name="l10n_it_edi_pec_sdi_user_id" invisible="not l10n_it_edi_use_pec"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
