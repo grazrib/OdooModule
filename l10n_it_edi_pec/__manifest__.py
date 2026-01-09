@@ -18,9 +18,11 @@
     "data": [
         "security/ir.model.access.csv",
         "data/config_parameter.xml",
+        "data/fetchmail_data.xml",
         "views/company_view.xml",
         "views/ir_mail_server.xml",
         "views/account_move_view.xml",
+        "views/fetchmail_view.xml",
     ],
     "installable": True,
     "auto_install": False,

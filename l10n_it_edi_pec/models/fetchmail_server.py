@@ -2,8 +2,11 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
 import logging
+from email import policy
+from email.parser import BytesParser
 
 from odoo import _, fields, models
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 MAX_POP_MESSAGES = 50
@@ -56,11 +59,27 @@ class FetchmailServer(models.Model):
             
             for num in data[0].split():
                 result, data = imap_server.fetch(num, "(RFC822)")
-                imap_server.store(num, "-FLAGS", "\\Seen")
+                raw_message = data[0][1] if data and data[0] else b""
+
+                is_sdi_pec = False
+                try:
+                    eml = BytesParser(policy=policy.default).parsebytes(raw_message or b"")
+                    headers_to_check = [
+                        eml.get("Reply-To") or "",
+                        eml.get("From") or "",
+                        eml.get("Return-Path") or "",
+                    ]
+                    is_sdi_pec = any("@pec.fatturapa.it" in h for h in headers_to_check)
+                except Exception:
+                    is_sdi_pec = False
+
+                if not is_sdi_pec:
+                    continue
+
                 try:
                     MailThread.with_context(**additional_context).message_process(
-                        'mail.thread',  # Use generic model
-                        data[0][1],
+                        'mail.thread',
+                        raw_message,
                         save_original=True,
                         strip_attachments=False,
                     )
@@ -68,8 +87,9 @@ class FetchmailServer(models.Model):
                 except Exception as e:
                     server.manage_pec_failure(e, error_messages)
                     continue
+
                 imap_server.store(num, "+FLAGS", "\\Seen")
-                self._cr.commit()
+                self.env.cr.commit()
                 
         except Exception as e:
             server.manage_pec_failure(e, error_messages)
@@ -108,7 +128,7 @@ class FetchmailServer(models.Model):
                 
                 for num in range(1, min(MAX_POP_MESSAGES, num_messages) + 1):
                     (header, messages, octets) = pop_server.retr(num)
-                    message = "\n".join(messages)
+                    message = b"\n".join(messages)
                     try:
                         MailThread.with_context(**additional_context).message_process(
                             'mail.thread',  # Use generic model
@@ -121,7 +141,7 @@ class FetchmailServer(models.Model):
                     except Exception as e:
                         server.manage_pec_failure(e, error_messages)
                         continue
-                    self._cr.commit()
+                    self.env.cr.commit()
                     
                 if num_messages < MAX_POP_MESSAGES:
                     break
@@ -135,54 +155,72 @@ class FetchmailServer(models.Model):
                 except:
                     pass
 
-    def fetch_mail(self):
+    def fetch_mail(self, raise_exception=True):
         """Override to handle PEC email fetching for e-invoices"""
         for server in self:
             if not server.is_l10n_it_edi_pec:
                 # For non-PEC servers, use standard behavior
-                super(FetchmailServer, server).fetch_mail()
+                super(FetchmailServer, server).fetch_mail(
+                    raise_exception=raise_exception
+                )
                 continue
-                
+
             # PEC server handling
-            additional_context = {"fetchmail_cron_running": True}
-            server = server.with_context(**additional_context)
-            MailThread = self.env["mail.thread"]
-            _logger.info(
-                "start checking for new e-invoices on PEC server %s",
-                server.name,
-            )
-            additional_context["fetchmail_server_id"] = server.id
-            additional_context["server_type"] = server.server_type or "imap"
-            error_messages = list()
-            
-            if (server.server_type or "imap") == "imap":
-                server.fetch_mail_server_type_imap(
-                    server, MailThread, error_messages, **additional_context
+            try:
+                additional_context = {"fetchmail_cron_running": True}
+                server_ctx = server.with_context(**additional_context)
+                server_sudo = server_ctx.sudo()
+                MailThread = server_sudo.env["mail.thread"]
+                _logger.debug(
+                    "start checking for new e-invoices on PEC server %s",
+                    server_ctx.name,
                 )
-            else:
-                server.fetch_mail_server_type_pop(
-                    server, MailThread, error_messages, **additional_context
+                additional_context["fetchmail_server_id"] = server_ctx.id
+                additional_context["server_type"] = server_ctx.server_type or "imap"
+                error_messages = list()
+
+                if (server_sudo.server_type or "imap") == "imap":
+                    server_sudo.fetch_mail_server_type_imap(
+                        server_sudo, MailThread, error_messages, **additional_context
+                    )
+                else:
+                    server_sudo.fetch_mail_server_type_pop(
+                        server_sudo, MailThread, error_messages, **additional_context
+                    )
+
+                if error_messages:
+                    server_sudo.notify_or_log(error_messages)
+                    server_sudo.pec_error_count += 1
+                    max_retry = self.env["ir.config_parameter"].sudo().get_param(
+                        "fetchmail.pec.max.retry", default="3"
+                    )
+                    if server_sudo.pec_error_count > int(max_retry):
+                        server_sudo.active = False
+                        server_sudo.notify_about_server_reset()
+                else:
+                    server_sudo.pec_error_count = 0
+            except Exception as e:
+                if raise_exception:
+                    raise ValidationError(
+                        _(
+                            "Couldn't get your emails. Check out the error message below for more info:\n%s",
+                            e,
+                        )
+                    ) from e
+                _logger.warning(
+                    "General failure when trying to fetch mail from %s server %s.",
+                    server.server_type,
+                    server.name,
+                    exc_info=True,
                 )
-            
-            if error_messages:
-                server.notify_or_log(error_messages)
-                server.pec_error_count += 1
-                max_retry = self.env["ir.config_parameter"].sudo().get_param(
-                    "fetchmail.pec.max.retry", default="3"
-                )
-                if server.pec_error_count > int(max_retry):
-                    server.active = False  # Disable server instead of setting to draft
-                    server.notify_about_server_reset()
-            else:
-                server.pec_error_count = 0
-                
+
         return True
 
     def manage_pec_failure(self, exception, error_messages):
         self.ensure_one()
-        _logger.info(
+        _logger.warning(
             "Failure when fetching emails using %s server %s.",
-            self._context.get("server_type", "imap"),
+            self.env.context.get("server_type", "imap"),
             self.name,
             exc_info=True,
         )
@@ -216,7 +254,7 @@ class FetchmailServer(models.Model):
                     "recipient_ids": [(6, 0, self.e_inv_notify_partner_ids.ids)],
                 }
             ).send()
-            _logger.info(
+            _logger.debug(
                 "Notifying partners %s about PEC server %s error",
                 self.e_inv_notify_partner_ids.ids,
                 self.name,

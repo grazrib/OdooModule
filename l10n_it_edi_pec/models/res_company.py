@@ -33,3 +33,11 @@ class ResCompany(models.Model):
         help="PEC email address of SdI (initially sdi01@pec.fatturapa.it)",
         default='sdi01@pec.fatturapa.it'
     )
+
+    def _l10n_it_edi_export_check(self):
+        errors = super()._l10n_it_edi_export_check()
+        if not errors:
+            return errors
+        if self and all(self.mapped("l10n_it_edi_use_pec")):
+            errors.pop("l10n_it_edi_settings_l10n_it_edi_proxy_user_id", None)
+        return errors

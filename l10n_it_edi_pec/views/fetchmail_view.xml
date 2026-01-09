@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="fetchmail_server_view_form_l10n_it_edi_pec" model="ir.ui.view">
+        <field name="name">fetchmail.server.form.l10n_it_edi_pec</field>
+        <field name="model">fetchmail.server</field>
+        <field name="inherit_id" ref="mail.view_email_server_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='server_type']" position="after">
+                <field name="is_l10n_it_edi_pec"/>
+            </xpath>
+
+            <xpath expr="//notebook" position="inside">
+                <page string="PEC" name="l10n_it_edi_pec" invisible="not is_l10n_it_edi_pec">
+                    <group>
+                        <field name="last_pec_error_message" readonly="1"/>
+                        <field name="pec_error_count" readonly="1"/>
+                        <field name="e_inv_notify_partner_ids" widget="many2many_tags"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="fetchmail_server_view_tree_l10n_it_edi_pec" model="ir.ui.view">
+        <field name="name">fetchmail.server.list.l10n_it_edi_pec</field>
+        <field name="model">fetchmail.server</field>
+        <field name="inherit_id" ref="mail.view_email_server_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='server_type']" position="after">
+                <field name="is_l10n_it_edi_pec"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
