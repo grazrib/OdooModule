@@ -653,6 +653,12 @@ class MailThread(models.AbstractModel):
                 return name[:-4]
             return name
 
+        def _strip_notification_suffix(name):
+            for sep in ("_RC_", "_NS_", "_MC_", "_NE_", "_DT_", "_AT_", "_MT_"):
+                if sep in (name or ""):
+                    return (name or "").split(sep)[0]
+            return name
+
         def _move_from_attachment(att):
             if not att:
                 return self.env["account.move"]
@@ -680,17 +686,27 @@ class MailThread(models.AbstractModel):
         Attachment = self.env["ir.attachment"].sudo()
         candidates = []
         base = _base_name(filename)
-        key_match = re.match(INVOICE_KEY_REGEX, base)
+        base_stripped = _strip_notification_suffix(base)
+        key_match = re.match(INVOICE_KEY_REGEX, base_stripped)
         progressive = key_match.group("progressive") if key_match else ""
+        country_or_vat = key_match.group(1) if key_match else ""
+        full_base = f"{country_or_vat}_{progressive}" if (country_or_vat and progressive) else ""
+
+        base_variants = []
+        for b in (base_stripped, base):
+            if b and b not in base_variants:
+                base_variants.append(b)
+        if full_base and full_base not in base_variants:
+            base_variants.insert(0, full_base)
         candidates.extend(
             [
                 filename,
-                base + ".xml",
-                base + ".xml.p7m",
-                base + ".p7m",
+                *[b + ".xml" for b in base_variants if b],
+                *[b + ".xml.p7m" for b in base_variants if b],
+                *[b + ".p7m" for b in base_variants if b],
             ]
         )
-        if progressive and progressive != base:
+        if progressive and progressive != base_stripped:
             candidates.extend(
                 [
                     progressive,
@@ -700,7 +716,10 @@ class MailThread(models.AbstractModel):
                 ]
             )
 
-        for cand in [c for c in candidates if c]:
+        seen_candidates = set()
+        candidates = [c for c in candidates if c and not (c.lower() in seen_candidates or seen_candidates.add(c.lower()))]
+
+        for cand in candidates:
             move = Move.search(
                 out_move_domain + [("l10n_it_edi_attachment_id.name", "=ilike", cand)],
                 order="id desc",
@@ -709,14 +728,20 @@ class MailThread(models.AbstractModel):
             if move:
                 return move
 
-        like_patterns = [
-            f"%_{base}.xml",
-            f"%_{base}.xml.p7m",
-            f"%_{base}.p7m",
-            f"%{base}.xml%",
-            f"%{base}.p7m%",
-        ]
-        if progressive and progressive != base:
+        like_patterns = []
+        for b in base_variants:
+            if not b:
+                continue
+            like_patterns.extend(
+                [
+                    f"%_{b}.xml",
+                    f"%_{b}.xml.p7m",
+                    f"%_{b}.p7m",
+                    f"%{b}.xml%",
+                    f"%{b}.p7m%",
+                ]
+            )
+        if progressive and progressive not in base_variants:
             like_patterns.extend(
                 [
                     f"%_{progressive}.xml",
@@ -735,12 +760,13 @@ class MailThread(models.AbstractModel):
             if move:
                 return move
 
-        for cand in [c for c in candidates if c]:
+        attachment_domain_base = [("res_id", "!=", 0)]
+        if company:
+            attachment_domain_base.append(("company_id", "=", company.id))
+
+        for cand in candidates:
             att = Attachment.search(
-                [
-                    ("name", "=ilike", cand),
-                    ("res_id", "!=", 0),
-                ],
+                attachment_domain_base + [("name", "=ilike", cand)],
                 order="id desc",
                 limit=1,
             )
@@ -749,10 +775,7 @@ class MailThread(models.AbstractModel):
                 return move
 
         att = Attachment.search(
-            [
-                ("name", "ilike", base + "%"),
-                ("res_id", "!=", 0),
-            ],
+            attachment_domain_base + [("name", "ilike", base_stripped + "%")],
             order="id desc",
             limit=10,
         )
@@ -762,10 +785,7 @@ class MailThread(models.AbstractModel):
                 return move
 
         att = Attachment.search(
-            [
-                ("name", "ilike", "%" + base + "%"),
-                ("res_id", "!=", 0),
-            ],
+            attachment_domain_base + [("name", "ilike", "%" + base_stripped + "%")],
             order="id desc",
             limit=10,
         )
@@ -775,7 +795,7 @@ class MailThread(models.AbstractModel):
                 return move
 
         if key_match:
-            vat_or_country = key_match.group(1) or key_match.group(2) or ""
+            vat_or_country = country_or_vat
             domain = [("move_type", "in", ("out_invoice", "out_refund", "out_receipt"))]
             if vat_or_country:
                 domain.append(("company_id.vat", "ilike", vat_or_country))

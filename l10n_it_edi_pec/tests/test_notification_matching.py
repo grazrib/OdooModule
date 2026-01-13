@@ -51,6 +51,56 @@ class TestPecSdiMatching(AccountTestInvoicingCommon):
         self.assertEqual(found, move)
         self.assertEqual(move.l10n_it_edi_attachment_id, attachment)
 
+    def test_find_invoice_by_xml_filename_uses_filename_prefix_before_progressive(self):
+        company = self.env.company
+        partner = self.env.ref("base.res_partner_1")
+        product = self.env.ref("product.product_product_10")
+
+        move_a = self.init_invoice(
+            "out_invoice",
+            partner=partner,
+            products=product,
+            taxes=self.tax_sale_a,
+        )
+        self.env["ir.attachment"].create(
+            {
+                "name": "IT12345670017_1000U.xml",
+                "type": "binary",
+                "mimetype": "application/xml",
+                "raw": b"<xml/>",
+                "res_model": "account.move",
+                "res_id": move_a.id,
+                "res_field": "l10n_it_edi_attachment_file",
+                "company_id": company.id,
+            }
+        )
+        move_a.invalidate_recordset(fnames=["l10n_it_edi_attachment_id"])
+
+        move_b = self.init_invoice(
+            "out_invoice",
+            partner=partner,
+            products=product,
+            taxes=self.tax_sale_a,
+        )
+        self.env["ir.attachment"].create(
+            {
+                "name": "IT99999999999_1000U.xml",
+                "type": "binary",
+                "mimetype": "application/xml",
+                "raw": b"<xml/>",
+                "res_model": "account.move",
+                "res_id": move_b.id,
+                "res_field": "l10n_it_edi_attachment_file",
+                "company_id": company.id,
+            }
+        )
+        move_b.invalidate_recordset(fnames=["l10n_it_edi_attachment_id"])
+
+        found = self.env["mail.thread"]._find_invoice_by_xml_filename(
+            "IT12345670017_1000U_RC_002.xml"
+        )
+        self.assertEqual(found, move_a)
+
     def test_normalize_attachment_filename_from_xml(self):
         company = self.env.company
         partner = self.env.ref("base.res_partner_1")

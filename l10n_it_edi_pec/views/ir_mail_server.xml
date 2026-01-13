@@ -3,24 +3,11 @@
     <record id="ir_mail_server_view_form_l10n_it_edi_pec" model="ir.ui.view">
         <field name="name">ir.mail_server.form.l10n_it_edi_pec</field>
         <field name="model">ir.mail_server</field>
-        <field name="priority" eval="1"/>
+        <field name="inherit_id" ref="base.ir_mail_server_form"/>
         <field name="arch" type="xml">
-            <form string="Outgoing Mail Server">
-                <sheet>
-                    <group>
-                        <group>
-                            <field name="name"/>
-                            <field name="is_l10n_it_edi_pec"/>
-                            <field name="smtp_host"/>
-                            <field name="smtp_port"/>
-                            <field name="smtp_encryption"/>
-                            <field name="smtp_user"/>
-                            <field name="smtp_pass" password="True"/>
-                        </group>
-                        
-                    </group>
-                </sheet>
-            </form>
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="is_l10n_it_edi_pec"/>
+            </xpath>
         </field>
     </record>
     <record id="fetchmail_server_view_list_incoming_l10n_it_edi_pec" model="ir.ui.view">
