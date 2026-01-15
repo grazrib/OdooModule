@@ -414,6 +414,36 @@ class MailThread(models.AbstractModel):
                 invoice.name,
                 (message_dict or {}).get("subject"),
             )
+            if not applied:
+                msg_attachments = []
+                seen = set()
+                for att in (message_dict or {}).get("attachments", []) or []:
+                    fname = getattr(att, "fname", "")
+                    content = getattr(att, "content", None)
+                    if not fname and isinstance(att, dict):
+                        fname = att.get("fname") or att.get("name") or ""
+                        content = att.get("content")
+                    if not fname and isinstance(att, (tuple, list)) and att:
+                        fname = att[0] or ""
+                        content = att[1] if len(att) > 1 else None
+
+                    if not fname or not content:
+                        continue
+
+                    key = (fname or "").strip().lower()
+                    if not key or key in seen:
+                        continue
+                    seen.add(key)
+
+                    payload = self._decode_bytes_maybe_base64(content)
+                    if payload:
+                        msg_attachments.append((fname, payload))
+
+                subject = (message_dict or {}).get("subject") or ""
+                invoice.message_post(
+                    body=_("PEC ricevuta ma non riconosciuta. Subject: %s") % subject,
+                    attachments=msg_attachments,
+                )
         else:
             _logger.info(
                 "PEC SdI notification parsed for invoice_id=%s invoice_name=%s",
@@ -590,48 +620,119 @@ class MailThread(models.AbstractModel):
         if len(response_attachments) > 1:
             _logger.info("More than 1 notification found in incoming invoice mail")
 
-        message_dict["model"] = "account.move"
-        message_dict["record_name"] = message_dict["subject"]
-        message_dict["res_id"] = 0
-        
-        attachments = self.env["ir.attachment"].sudo().create(
-            [
-                {
-                    "name": att.fname,
+        fetchmail_server_id = self.env.context.get("fetchmail_server_id")
+        company = False
+        if fetchmail_server_id:
+            company = (
+                self.env["res.company"]
+                .sudo()
+                .search([("l10n_it_edi_pec_server_id", "=", fetchmail_server_id)], limit=1)
+            )
+
+        Attachment = self.env["ir.attachment"].sudo()
+        subject = (message_dict or {}).get("subject") or ""
+
+        response_by_invoice = {}
+        for att in (message_dict.get("attachments", []) or []):
+            fname = getattr(att, "fname", "")
+            if not fname and isinstance(att, dict):
+                fname = att.get("fname") or att.get("name") or ""
+            if not fname and isinstance(att, (tuple, list)) and att:
+                fname = att[0] or ""
+            if not fname:
+                continue
+
+            invoice_filename = self._invoice_filename_from_notification_filename(fname)
+            if not invoice_filename:
+                continue
+            response_by_invoice.setdefault(invoice_filename.strip().lower(), []).append(att)
+
+        for fp_att in fatturapa_attachments:
+            fname = getattr(fp_att, "fname", "")
+            content = getattr(fp_att, "content", None)
+            if not fname:
+                continue
+
+            attachment_domain = [
+                ("name", "=ilike", fname),
+                ("res_model", "=", "account.move"),
+                ("res_field", "=", "l10n_it_edi_attachment_file"),
+            ]
+            if company:
+                attachment_domain.append(("company_id", "=", company.id))
+            existing = Attachment.search(attachment_domain, order="id desc", limit=1)
+
+            move = self.env["account.move"]
+            if existing and existing.res_id:
+                move = self.env["account.move"].sudo().browse(existing.res_id).exists()
+            else:
+                raw = self._decode_bytes_maybe_base64(content)
+                if not raw:
+                    continue
+
+                new_att_vals = {
+                    "name": fname,
                     "type": "binary",
-                    "raw": (
-                        att.content
-                        if isinstance(att.content, (bytes, bytearray))
-                        else str(att.content or "").encode()
-                    ),
+                    "mimetype": "application/xml",
+                    "raw": raw,
                     "res_model": "account.move",
                     "res_id": 0,
                 }
-                for att in message_dict.get("attachments", [])
-            ]
-        )
+                if company:
+                    new_att_vals["company_id"] = company.id
+                new_att = Attachment.create(new_att_vals)
+                move = self.create_invoice_from_attachment(new_att, message_dict)
 
-        for attachment in attachments:
-            if fatturapa_regex.match(attachment.name):
-                self.create_invoice_from_attachment(attachment, message_dict)
+            if not move:
+                continue
 
-        message_dict["attachment_ids"] = attachments.ids
+            resp_atts = response_by_invoice.get(
+                self._normalize_invoice_xml_filename(fname).strip().lower(),
+                response_attachments,
+            )
+            msg_attachments = []
+            seen = set()
+            for ra in resp_atts:
+                rname = getattr(ra, "fname", "")
+                rcontent = getattr(ra, "content", None)
+                if not rname and isinstance(ra, dict):
+                    rname = ra.get("fname") or ra.get("name") or ""
+                    rcontent = ra.get("content")
+                if not rname and isinstance(ra, (tuple, list)) and ra:
+                    rname = ra[0] or ""
+                    rcontent = ra[1] if len(ra) > 1 else None
+
+                if not rname or not rcontent:
+                    continue
+
+                key = (rname or "").strip().lower()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+
+                payload = self._decode_bytes_maybe_base64(rcontent)
+                if payload:
+                    msg_attachments.append((rname, payload))
+
+            if msg_attachments:
+                move.message_post(
+                    body=_("Notifiche PEC ricevute. Subject: %s") % subject,
+                    attachments=msg_attachments,
+                )
+
         self.clean_message_dict(message_dict)
-        
-        # Remove model/res_id to avoid attaching to wrong record
-        del message_dict["model"]
-        del message_dict["res_id"]
-        
-        _logger.info(
-            "Processed PEC incoming attachments (no chatter message created)"
-        )
-        
         return []
 
     def _find_invoice_by_xml_filename(self, filename):
         filename = (filename or "").strip()
         if not filename:
             return self.env["account.move"]
+
+        derived = self._invoice_filename_from_notification_filename(filename)
+        if derived:
+            filename = derived
+
+        filename = self._normalize_invoice_xml_filename(filename)
 
         fetchmail_server_id = self.env.context.get("fetchmail_server_id")
         company = False
@@ -680,44 +781,27 @@ class MailThread(models.AbstractModel):
 
         Move = self.env["account.move"].sudo()
         out_move_domain = [("move_type", "in", ("out_invoice", "out_refund", "out_receipt"))]
-        if company:
-            out_move_domain.append(("company_id", "=", company.id))
-
-        Attachment = self.env["ir.attachment"].sudo()
-        candidates = []
+        
         base = _base_name(filename)
         base_stripped = _strip_notification_suffix(base)
         key_match = re.match(INVOICE_KEY_REGEX, base_stripped)
         progressive = key_match.group("progressive") if key_match else ""
         country_or_vat = key_match.group(1) if key_match else ""
-        full_base = f"{country_or_vat}_{progressive}" if (country_or_vat and progressive) else ""
+        if not (country_or_vat and progressive):
+            return self.env["account.move"]
 
-        base_variants = []
-        for b in (base_stripped, base):
-            if b and b not in base_variants:
-                base_variants.append(b)
-        if full_base and full_base not in base_variants:
-            base_variants.insert(0, full_base)
-        candidates.extend(
-            [
-                filename,
-                *[b + ".xml" for b in base_variants if b],
-                *[b + ".xml.p7m" for b in base_variants if b],
-                *[b + ".p7m" for b in base_variants if b],
-            ]
-        )
-        if progressive and progressive != base_stripped:
-            candidates.extend(
-                [
-                    progressive,
-                    progressive + ".xml",
-                    progressive + ".xml.p7m",
-                    progressive + ".p7m",
-                ]
-            )
+        if company:
+            out_move_domain.append(("company_id", "=", company.id))
+        else:
+            out_move_domain.append(("company_id.vat", "=ilike", country_or_vat))
 
-        seen_candidates = set()
-        candidates = [c for c in candidates if c and not (c.lower() in seen_candidates or seen_candidates.add(c.lower()))]
+        Attachment = self.env["ir.attachment"].sudo()
+        base_key = f"{country_or_vat}_{progressive}"
+        candidates = [
+            base_key + ".xml",
+            base_key + ".xml.p7m",
+            base_key + ".p7m",
+        ]
 
         for cand in candidates:
             move = Move.search(
@@ -728,41 +812,29 @@ class MailThread(models.AbstractModel):
             if move:
                 return move
 
-        like_patterns = []
-        for b in base_variants:
-            if not b:
-                continue
-            like_patterns.extend(
-                [
-                    f"%_{b}.xml",
-                    f"%_{b}.xml.p7m",
-                    f"%_{b}.p7m",
-                    f"%{b}.xml%",
-                    f"%{b}.p7m%",
-                ]
-            )
-        if progressive and progressive not in base_variants:
-            like_patterns.extend(
-                [
-                    f"%_{progressive}.xml",
-                    f"%_{progressive}.xml.p7m",
-                    f"%_{progressive}.p7m",
-                    f"%{progressive}.xml%",
-                    f"%{progressive}.p7m%",
-                ]
-            )
-        for pat in like_patterns:
-            move = Move.search(
-                out_move_domain + [("l10n_it_edi_attachment_id.name", "ilike", pat)],
+        progressive_candidates = [
+            progressive + ".xml",
+            progressive + ".xml.p7m",
+            progressive + ".p7m",
+        ]
+        for cand in progressive_candidates:
+            moves = Move.search(
+                out_move_domain + [("l10n_it_edi_attachment_id.name", "=ilike", cand)],
                 order="id desc",
-                limit=1,
+                limit=2,
             )
-            if move:
-                return move
+            if len(moves) == 1:
+                return moves
 
-        attachment_domain_base = [("res_id", "!=", 0)]
+        attachment_domain_base = [
+            ("res_model", "=", "account.move"),
+            ("res_field", "=", "l10n_it_edi_attachment_file"),
+            ("res_id", "!=", 0),
+        ]
         if company:
             attachment_domain_base.append(("company_id", "=", company.id))
+        else:
+            attachment_domain_base.append(("company_id.vat", "=ilike", country_or_vat))
 
         for cand in candidates:
             att = Attachment.search(
@@ -774,42 +846,16 @@ class MailThread(models.AbstractModel):
             if move:
                 return move
 
-        att = Attachment.search(
-            attachment_domain_base + [("name", "ilike", base_stripped + "%")],
-            order="id desc",
-            limit=10,
-        )
-        for a in att:
-            move = _move_from_attachment(a)
-            if move:
-                return move
-
-        att = Attachment.search(
-            attachment_domain_base + [("name", "ilike", "%" + base_stripped + "%")],
-            order="id desc",
-            limit=10,
-        )
-        for a in att:
-            move = _move_from_attachment(a)
-            if move:
-                return move
-
-        if key_match:
-            vat_or_country = country_or_vat
-            domain = [("move_type", "in", ("out_invoice", "out_refund", "out_receipt"))]
-            if vat_or_country:
-                domain.append(("company_id.vat", "ilike", vat_or_country))
-            if progressive:
-                domain.append("|")
-                domain.extend(
-                    [
-                        ("name", "ilike", progressive),
-                        ("payment_reference", "ilike", progressive),
-                    ]
-                )
-            move = self.env["account.move"].sudo().search(domain, order="id desc", limit=1)
-            if move:
-                return move
+        for cand in progressive_candidates:
+            atts = Attachment.search(
+                attachment_domain_base + [("name", "=ilike", cand)],
+                order="id desc",
+                limit=2,
+            )
+            if len(atts) == 1:
+                move = _move_from_attachment(atts)
+                if move:
+                    return move
 
         return self.env["account.move"]
 
@@ -839,17 +885,17 @@ class MailThread(models.AbstractModel):
         
         company_id = False
         if fetchmail_server_id:
-            # Find company from fetchmail server
-            company = self.env["res.company"].search([
-                ("l10n_it_edi_pec_server_id", "=", fetchmail_server_id)
-            ], limit=1)
+            company = self.env["res.company"].sudo().search(
+                [("l10n_it_edi_pec_server_id", "=", fetchmail_server_id)],
+                limit=1,
+            )
             if company:
                 company_id = company.id
 
         # Create empty move
-        move = self.env["account.move"].with_company(company_id or self.env.company.id).create({
-            "move_type": "in_invoice",
-        })
+        move = self.env["account.move"].with_company(company_id or self.env.company.id).create(
+            {"move_type": "in_invoice"}
+        )
         
         # Attach file
         attachment.write({
