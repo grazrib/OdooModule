@@ -1,5 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_label_template_user,label.template user,model_label_template,base.group_user,1,1,1,1
-access_label_template_line_user,label.template.line user,model_label_template_line,base.group_user,1,1,1,1
-access_label_print_wizard_user,label.print.wizard user,model_label_print_wizard,base.group_user,1,1,1,1
-access_label_template_import_wizard_user,label.template.import.wizard user,model_label_template_import_wizard,base.group_user,1,1,1,1
