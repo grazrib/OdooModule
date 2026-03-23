@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- 1️⃣ Main Action -->
+    <record id="action_label_templates" model="ir.actions.act_window">
+        <field name="name">Modelli Etichette</field>
+        <field name="res_model">label.template</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- 2️⃣ Menus -->
+    <menuitem id="menu_label_root_app"
+              name="Studio Etichette"
+              sequence="10"
+              web_icon="ahm_label_studio,static/description/icon.png"
+              action="ahm_label_studio.action_label_templates"/>
+    <menuitem id="menu_label_root"
+              name="Studio Etichette"
+              parent="menu_label_root_app"
+              sequence="10"
+              action="ahm_label_studio.action_label_templates"/>
+
+    <!-- 3️⃣ Print Wizard -->
+    <record id="action_open_print_labels_wizard" model="ir.actions.act_window">
+        <field name="name">Stampa etichette (Studio Etichette)</field>
+        <field name="res_model">label.print.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'active_model': 'product.template'}</field>
+    </record>
+
+    <!-- 4️⃣ Bind Action to Product list (Action dropdown) -->
+    <record id="product_template_action_print_labels_server" model="ir.actions.server">
+        <field name="name">Stampa etichette (Studio Etichette)</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="state">code</field>
+        <field name="code">
+            action = {
+                'type': 'ir.actions.act_window',
+                'res_model': 'label.print.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'active_model': 'product.template'}
+            }
+        </field>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_type">action</field>
+    </record>
+
+    <!-- 5️⃣ Extend Product Form View -->
+
+    <record id="product_template_view_form_inherit_labelstudio" model="ir.ui.view">
+    <field name="name">product.template.form.inherit.labelstudio</field>
+    <field name="model">product.template</field>
+    <field name="inherit_id" ref="product.product_template_only_form_view"/>
+    <field name="arch" type="xml">
+        <xpath expr="//div[@name='button_box']" position="inside">
+            <button name="%(action_open_print_labels_wizard)d"
+                    type="action"
+                    class="oe_stat_button"
+                    icon="fa-print"
+                    string="Stampa etichette (Studio)"/>
+        </xpath>
+    </field>
+</record>
+
+<!--    <record id="product_template_view_form_inherit_labelstudio" model="ir.ui.view">-->
+<!--        <field name="name">product.template.form.inherit.labelstudio</field>-->
+<!--        <field name="model">product.template</field>-->
+<!--        <field name="inherit_id" ref="product.product_template_only_form_view"/>-->
+<!--        <field name="arch" type="xml">-->
+<!--            <header position="inside">-->
+<!--                <button name="%(action_open_print_labels_wizard)d"-->
+<!--                        type="action"-->
+<!--                        string="Print Labels (Studio)"-->
+<!--                        class="oe_highlight"/>-->
+<!--            </header>-->
+<!--        </field>-->
+<!--    </record>-->
+
+</odoo>

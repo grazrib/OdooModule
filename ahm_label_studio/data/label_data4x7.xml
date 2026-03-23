@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <data noupdate="1">
+
+    <record id="label_template_a4_4x7" model="label.template">
+      <field name="name">A4 Label 4 x 7</field>
+      <field name="model_id" ref="product.model_product_template"/>
+      <field name="paperformat_id" search="[('name', '=', 'A4 Label Sheet')]"/>
+      <field name="label_width_mm">48</field>
+      <field name="label_height_mm">21</field>
+      <field name="columns">4</field>
+      <field name="rows">7</field>
+      <field name="margin_left_mm">0</field>
+      <field name="margin_top_mm">0</field>
+      <field name="h_spacing_mm">3</field>
+      <field name="v_spacing_mm">3</field>
+      <field name="default_barcode_type">Code128</field>
+      <field name="show_barcode_human_readable" eval="False"/>
+      <field name="label_border_style">dashed</field>
+      <field name="currency_symbol">$</field>
+      <field name="currency_position">before</field>
+    </record>
+
+
+    <record id="label_template_a4_4x7_color" model="label.template.line">
+        <field name="template_id" ref="label_template_a4_4x7"/>
+        <field name="display_type">line</field>
+        <field name="x_pos">0</field>
+        <field name="y_pos">0</field>
+        <field name="width_mm">47.30</field>
+        <field name="height_mm">10</field>
+        <field name="color">#edf75e</field>
+    </record>
+
+
+    <record id="label_template_a4_4x7_field_name" model="label.template.line">
+      <field name="template_id" ref="label_template_a4_4x7"/>
+      <field name="field_id" search="[('model','=','product.template'),('name','=','name')]"/>
+      <field name="display_type">text</field>
+      <field name="x_pos">4</field>
+      <field name="y_pos">3</field>
+      <field name="font_size">14</field>
+      <field name="bold">True</field>
+    </record>
+
+    <record id="label_template_a4_4x7_price" model="label.template.line">
+      <field name="template_id" ref="label_template_a4_4x7"/>
+      <field name="field_id" search="[('model','=','product.template'),('name','=','list_price')]"/>
+      <field name="display_type">text</field>
+      <field name="x_pos">32</field>
+      <field name="y_pos">3</field>
+      <field name="font_size">14</field>
+      <field name="bold">True</field>
+      <field name="color">#000000</field>
+    </record>
+
+    <record id="label_template_a4_4x7_field_barcode" model="label.template.line">
+      <field name="template_id" ref="label_template_a4_4x7"/>
+      <field name="field_id" search="[('model','=','product.template'),('name','=','barcode')]"/>
+      <field name="display_type">barcode</field>
+      <field name="barcode_type">Code128</field>
+      <field name="show_human_readable" eval="False"/>
+      <field name="x_pos">4</field>
+      <field name="y_pos">10.30</field>
+      <field name="width_mm">40</field>
+      <field name="height_mm">9</field>
+    </record>
+
+
+  </data>
+</odoo>

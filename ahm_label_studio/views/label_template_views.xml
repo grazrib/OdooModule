@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <!-- Azione wizard importazione, usata nel form principale -->
+  <record id="action_label_template_import_wizard" model="ir.actions.act_window">
+    <field name="name">Importa modello</field>
+    <field name="res_model">label.template.import.wizard</field>
+    <field name="view_mode">form</field>
+    <field name="target">new</field>
+  </record>
+
+  <record id="view_label_template_form" model="ir.ui.view">
+    <field name="name">label.template.form</field>
+    <field name="model">label.template</field>
+    <field name="arch" type="xml">
+      <form string="Modello etichetta">
+        <header>
+          <button name="action_export_template" type="object" string="Export Template" class="btn-primary"/>
+          <button name="%(action_label_template_import_wizard)d" type="action" string="Import Template" class="btn-secondary"/>
+        </header>
+        <sheet>
+          <!-- General settings -->
+          <group string="Modello">
+           <group>
+             <field name="name"/>
+             <field name="default_barcode_type"/>
+             <field name="show_barcode_human_readable"/>
+             <field name="currency_symbol"/>
+             <field name="currency_position"/>
+           </group>
+            <group>
+              <field name="columns"/>
+              <field name="rows"/>
+              <field name="label_border_style"/>
+            </group>
+          </group>
+
+          <group string="Layout etichetta">
+            <group>
+              <field name="label_width_mm"/>
+              <field name="label_height_mm"/>
+            </group>
+            <group>
+              <field name="h_spacing_mm"/>
+              <field name="v_spacing_mm"/>
+            </group>
+          
+          </group>
+
+
+          <group string="Formato carta">
+            <group>
+              <field name="paperformat_id"/>
+              <field name="margin_left_mm"/>
+              <field name="margin_top_mm"/>
+            </group>
+          </group>
+
+
+          <!-- ✅ Full-width preview area -->
+          <separator string="Anteprima live" colspan="4"/>
+          <div class="oe_title" style="padding:10px 0;">
+            <field name="preview_html" nolabel="1" readonly="1" widget="html"
+                   style="width:100%; min-height:250px; max-height:250px; border:1px solid #ddd; border-radius:4px;"/>
+          </div>
+
+          <!-- Notebook for field lines -->
+          <notebook class="oe_label_template_tabs">
+            <page string="Campi etichetta">
+              <field name="field_line_ids">
+                <list class="oe_compact_label_lines">
+                  <field name="sequence" widget="handle"/>
+                  <field name="field_id" options="{'no_create': False}" domain="[('model', '=', 'product.template')]"/>
+                  <field name="display_type"/>
+                  <field name="show_label"/>
+                  <field name="label_text"/>
+                  <field name="decimal_precision"/>
+                  <field name="is_currency"/>
+                  <field name="variable_key" invisible="display_type != 'variable'"/>
+                  <field name="align"/>
+                  <field name="color" widget="color" invisible="display_type not in ('text', 'line')" readonly="display_type != 'line'"/>
+                  <field name="font_size" readonly="display_type != 'text'"/>
+                  <field name="bold"/>
+                  <field name="x_pos"/>
+                  <field name="y_pos"/>
+                  <field name="width_mm"/>
+                  <field name="height_mm"/>
+                </list>
+                <form string="Campo etichetta">
+                  <group>
+                    <group>
+                      <field name="sequence" string="Ordine di stampa (Z-index)"/>
+                      <field name="field_id" options="{'no_create': False}" domain="[('model', '=', 'product.template')]"/>
+                      <field name="display_type"/>
+                      <field name="show_label"/>
+                      <field name="label_text"/>
+                      <field name="decimal_precision"/>
+                      <field name="is_currency"/>
+                      <field name="variable_key" invisible="display_type != 'variable'"/>
+                      <field name="align"/>
+                      <field name="color" widget="color" invisible="display_type not in ('text', 'line')"/>
+                      <field name="barcode_type" invisible="display_type != 'barcode'"/>
+                    </group>
+                    <group>
+                      <field name="font_size" readonly="display_type != 'text'"/>
+                      <field name="bold"/>
+                      <field name="width_mm"/>
+                      <field name="height_mm"/>
+                    </group>
+                  </group>
+                  <group>
+                    <field name="x_pos"/>
+                    <field name="y_pos"/>
+                  </group>
+                  <group invisible="display_type != 'barcode'">
+                    <field name="show_human_readable"/>
+                  </group>
+                </form>
+              </field>
+            </page>
+          </notebook>
+
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <!-- Tree view -->
+  <record id="view_label_template_tree" model="ir.ui.view">
+    <field name="name">label.template.list</field>
+    <field name="model">label.template</field>
+    <field name="arch" type="xml">
+      <list string="Modelli etichette">
+        <header>
+          <button name="%(action_label_template_import_wizard)d" type="action" string="Importa Modello" display="always"/>
+        </header>
+        <field name="name"/>
+        <field name="model_id"/>
+      </list>
+    </field>
+  </record>
+
+  <!-- Window Action -->
+  <record id="action_label_template" model="ir.actions.act_window">
+    <field name="name">Modelli etichette</field>
+    <field name="res_model">label.template</field>
+    <field name="view_mode">list,form</field>
+  </record>
+
+  <record id="view_label_template_import_wizard_form" model="ir.ui.view">
+    <field name="name">label.template.import.wizard.form</field>
+    <field name="model">label.template.import.wizard</field>
+    <field name="arch" type="xml">
+      <form string="Importa modello">
+        <sheet>
+          <group>
+            <field name="file" filename="filename"/>
+          </group>
+          <separator string="Se il modello esiste già"/>
+          <group>
+            <field name="create_copy"
+                   help="Crea il modello con il suffisso '(copia)' senza toccare quello esistente."/>
+            <field name="update_existing"
+                   help="Cancella il modello esistente e lo sostituisce completamente con quello importato. Attenzione: operazione irreversibile."/>
+          </group>
+        </sheet>
+        <footer>
+          <button name="action_import" type="object" string="Importa" class="btn-primary"/>
+          <button string="Annulla" special="cancel" class="btn-secondary"/>
+        </footer>
+      </form>
+    </field>
+  </record>
+
+</odoo>

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <data>
+
+    <!-- Report Action -->
+    <record id="action_dynamic_label_report" model="ir.actions.report">
+      <field name="name">Report dinamico Studio Etichette</field>
+      <field name="model">label.print.wizard</field>
+      <field name="report_type">qweb-pdf</field>
+      <field name="report_name">ahm_label_studio.dynamic_label_template</field>
+      <field name="report_file">ahm_label_studiodynamic_label_template</field>
+      <field name="paperformat_id" ref="ahm_label_studio.paperformat_dynamic_label"/>
+      <field name="print_report_name">'Labels - %s' % (object.template_id.name)</field>
+    </record>
+
+    <!-- Label Template -->
+    <template id="dynamic_label_template">
+      <t t-call="web.html_container">
+        <meta charset="utf-8"/>
+        <t t-set="report_url"
+           t-value="(request.env['ir.config_parameter'].sudo().get_param('report.url') or request.env['ir.config_parameter'].sudo().get_param('web.base.url') or '').rstrip('/')"/>
+        <style>
+          @page {
+            size: <t t-esc="(template.page_width_mm or template.paperformat_id.page_width or template.label_width_mm)"/>mm
+                  <t t-esc="(template.page_height_mm or template.paperformat_id.page_height or template.label_height_mm)"/>mm;
+            margin:0;
+          }
+          body {
+            margin:0;
+            padding:0;
+          }
+        </style>
+        <t t-set="label_border_style"
+           t-value="{'dashed':'1px dashed #ccc','solid':'1px solid #444','none':'0'}.get(template.label_border_style or 'dashed', '1px dashed #ccc')"/>
+        <t t-set="fallback_barcode" t-value="template.default_barcode_type or 'Code128'"/>
+        <t t-foreach="pages" t-as="page">
+          <div style="margin:0; page-break-after:always; background:white; box-sizing:border-box;">
+            <t t-set="columns_count" t-value="max(template.columns, 1)"/>
+            <t t-set="table_width" t-value="columns_count * template.label_width_mm + max(columns_count - 1, 0) * template.h_spacing_mm"/>
+            <t t-set="wrapper_style"
+               t-value="'padding-top:'+str(template.margin_top_mm)+'mm; padding-left:'+str(template.margin_left_mm)+'mm;'"/>
+            <div t-att-style="wrapper_style">
+              <table t-att-style="'border-spacing:'+str(template.h_spacing_mm)+'mm '+str(template.v_spacing_mm)+'mm; border-collapse:separate; table-layout:fixed; width:'+str(table_width)+'mm; margin-top:-'+str(template.v_spacing_mm)+'mm; margin-left:-'+str(template.h_spacing_mm)+'mm;'">
+              <tbody>
+                <t t-foreach="page" t-as="row">
+                  <t t-if="row">
+                  <tr>
+                    <t t-foreach="row" t-as="cell">
+                      <td t-att-style="'position:relative; width:'+str(template.label_width_mm)+'mm; height:'+str(template.label_height_mm)+'mm; border:'+label_border_style+'; overflow:hidden; padding:0; margin:0; vertical-align:top;'">
+                        <t t-if="cell">
+                          <t t-foreach="template.field_line_ids.sorted('sequence')" t-as="line">
+                            <t t-set="val" t-value="value_for(cell['rec'], line) or ''"/>
+                            <t t-set="base_pos"
+                               t-value="'position:absolute; left:'+str(line.x_pos or 0)+'mm; top:'+str(line.y_pos or 0)+'mm; margin:0; padding:0;'"/>
+
+                            <t t-if="line.display_type == 'barcode'">
+                              <t t-set="barcode_type" t-value="fallback_barcode"/>
+                              <t t-set="barcode_url"
+                                 t-value="report_url + '/report/barcode/' + barcode_type + '/' + (val or '') + '?quiet=0&amp;humanreadable=' + ('1' if line.show_human_readable else '0')"/>
+                              <img t-att-src="barcode_url"
+                                   t-att-style="base_pos + 'width:'+str(line.width_mm or 25)+'mm; height:'+str(line.height_mm or 15)+'mm; object-fit:contain; display:block;'"/>
+                            </t>
+                            <t t-elif="line.display_type == 'qrcode'">
+                              <img t-att-src="report_url + '/report/barcode/QR/' + (val or '')"
+                                   t-att-style="base_pos + 'width:'+str(line.width_mm or 20)+'mm; height:'+str(line.height_mm or 20)+'mm; object-fit:contain; display:block;'"/>
+                            </t>
+                            <t t-elif="line.display_type == 'image'">
+                              <img t-att-src="image_data_uri(val) if val else '/ahm_label_studio/static/description/noimg.png'"
+                                t-att-style="base_pos + 'width:'+str(line.width_mm or 20)+'mm; height:'+str(line.height_mm or 20)+'mm; object-fit:contain; display:block;'"/>
+
+                            </t>
+                            <t t-elif="line.display_type == 'line'">
+                              <t t-set="line_height" t-value="line.height_mm or 0.0"/>
+                              <t t-set="line_width" t-value="line.width_mm or 0.0"/>
+                              <t t-set="mm_to_px" t-value="3.78"/>
+                              <t t-if="line_width &lt;= line_height">
+                                <t t-set="length" t-value="line_height if line_height &gt; 0 else 0.5"/>
+                                <t t-set="thickness_mm" t-value="line_width if line_width &gt; 0 else 0.2"/>
+                                <t t-set="thickness_px" t-value="max(thickness_mm * mm_to_px, 1)"/>
+                                <div t-att-style="base_pos + 'height:'+str(length)+'mm; width:0; border-left:'+str(thickness_px)+'px solid '+(line.color or '#000')+';'"/>
+                              </t>
+                              <t t-else="">
+                                <t t-set="length" t-value="line_width if line_width &gt; 0 else 0.5"/>
+                                <t t-set="thickness_mm" t-value="line_height if line_height &gt; 0 else 0.2"/>
+                                <t t-set="thickness_px" t-value="max(thickness_mm * mm_to_px, 1)"/>
+                                <div t-att-style="base_pos + 'width:'+str(length)+'mm; height:0; border-top:'+str(thickness_px)+'px solid '+(line.color or '#000')+';'"/>
+                              </t>
+                            </t>
+                            <t t-else="">
+                              <t t-set="ttype" t-value="(line.is_currency and 'monetary') or (line.field_id and line.field_id.ttype) or 'text'"/>
+                              <t t-set="display_val" t-value="format_number(cell['rec'], val, ttype, line) if ttype in ('float','monetary') else val"/>
+                              <t t-set="label_txt" t-value="line.show_label and (line.label_text or (line.field_id and line.field_id.field_description) or '') or ''"/>
+                              <t t-set="align" t-value="line.align or 'left'"/>
+                              <t t-set="width_mm" t-value="line.width_mm or template.label_width_mm"/>
+                              <div t-att-style="base_pos + 'font-size:'+str(line.font_size or 10)+'px; color:'+(line.color or '#000')+'; font-weight:'+('bold' if line.bold else 'normal')+'; white-space:normal; width:'+str(width_mm)+'mm; text-align:'+align+';'">
+                                <t t-if="ttype == 'html'">
+                                  <t t-if="label_txt">
+                                    <t t-esc="label_txt"/>
+                                  </t>
+                                  <t t-raw="val"/>
+                                </t>
+                                <t t-elif="label_txt and display_val">
+                                  <t t-esc="label_txt + ' ' + display_val"/>
+                                </t>
+                                <t t-elif="label_txt">
+                                  <t t-esc="label_txt"/>
+                                </t>
+                                <t t-else="">
+                                  <t t-esc="display_val"/>
+                                </t>
+                              </div>
+                            </t>
+                          </t>
+                        </t>
+                      </td>
+                    </t>
+                  </tr>
+                  </t>
+                </t>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </t>
+      </t>
+    </template>
+
+  </data>
+</odoo>
